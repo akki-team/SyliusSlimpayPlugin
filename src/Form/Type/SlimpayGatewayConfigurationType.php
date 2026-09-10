@@ -12,10 +12,15 @@ use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\Validator\Constraints\NotBlank;
 
 /**
- * Memes cles de configuration que le greffon Payum : les passerelles deja en base restent lisibles
- * telles quelles, seule la factory change de nom.
+ * Memes cles de configuration que le greffon Payum, et meme nom de passerelle : les passerelles
+ * deja en base restent lisibles telles quelles. La bascule d'un rail a l'autre se fait par
+ * `use_payum', pas par un renommage de factory.
+ *
+ * Priorite a 1 parce que le greffon Payum declare lui aussi le type `slimpay' tant qu'il est
+ * installe : sans elle, lequel des deux formulaires alimente le registre depend de l'ordre de
+ * decouverte des services. Les deux declarent les memes champs, mais autant que ce soit decide.
  */
-#[AsGatewayConfigurationType(type: 'slimpay', label: 'akki.slimpay.gateway_label')]
+#[AsGatewayConfigurationType(type: 'slimpay', label: 'akki.slimpay.gateway_label', priority: 1)]
 final class SlimpayGatewayConfigurationType extends AbstractType
 {
     public function buildForm(FormBuilderInterface $builder, array $options): void
