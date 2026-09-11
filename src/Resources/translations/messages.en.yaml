@@ -1,0 +1,10 @@
+akki:
+    slimpay:
+        gateway_label: Slimpay (SEPA direct debit)
+        app_id: Application ID
+        app_secret: Application secret key
+        creditor_reference: Creditor reference
+        sandbox: Sandbox
+        default_checkout_mode: Checkout mode
+        'no': 'No'
+        'yes': 'Yes'

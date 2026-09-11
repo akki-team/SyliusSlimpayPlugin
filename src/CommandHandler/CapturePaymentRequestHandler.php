@@ -8,6 +8,7 @@ use Akki\SyliusSlimpayPlugin\Api\ClientFactoryInterface;
 use Akki\SyliusSlimpayPlugin\Command\CapturePaymentRequest;
 use Akki\SyliusSlimpayPlugin\Constants\Constants;
 use Akki\SyliusSlimpayPlugin\Provider\MandateFieldsProviderInterface;
+use Akki\SyliusSlimpayPlugin\Provider\PaymentDetailsProviderInterface;
 use Akki\SyliusSlimpayPlugin\Util\ResourceSerializer;
 use Sylius\Abstraction\StateMachine\StateMachineInterface;
 use Sylius\Bundle\CoreBundle\OrderPay\Provider\UrlProviderInterface;
@@ -33,7 +34,8 @@ final readonly class CapturePaymentRequestHandler
         private PaymentRequestProviderInterface $paymentRequestProvider,
         private ClientFactoryInterface $clientFactory,
         private MandateFieldsProviderInterface $mandateFieldsProvider,
-        private UrlProviderInterface $afterPayUrlProvider,
+        private PaymentDetailsProviderInterface $paymentDetailsProvider,
+        private UrlProviderInterface $payUrlProvider,
         private StateMachineInterface $stateMachine,
     ) {
     }
@@ -54,23 +56,32 @@ final readonly class CapturePaymentRequestHandler
         $scheme = $details['payment_scheme'] ?? Constants::PAYMENT_SCHEME_SEPA_DIRECT_DEBIT_CORE;
         $checkoutMode = $details['checkout_mode'] ?? $api->getDefaultCheckoutMode();
         $subscriberReference = $this->mandateFieldsProvider->provideSubscriberReference($payment);
+        $returnUrl = $this->payUrlProvider->getUrl($paymentRequest, UrlGeneratorInterface::ABSOLUTE_URL);
 
         if (Constants::PAYMENT_SCHEME_CARD === $scheme) {
             $order = $api->setUpCardAlias($subscriberReference);
         } else {
+            $champs = $this->mandateFieldsProvider->provide($payment);
+            $this->assertMandateFieldsAreComplete($subscriberReference, $champs);
+
             $order = $api->signMandate(
                 $subscriberReference,
                 $scheme,
-                $this->mandateFieldsProvider->provide($payment),
-                $this->afterPayUrlProvider->getUrl($paymentRequest, UrlGeneratorInterface::ABSOLUTE_URL),
+                $champs,
+                $returnUrl,
                 0,
                 (string) $payment->getCurrencyCode(),
             );
         }
 
-        $details['payment_scheme'] = $scheme;
-        $details['checkout_mode'] = $checkoutMode;
-        $details['order'] = ResourceSerializer::serializeResource($order);
+        $details = array_merge(
+            $details,
+            $this->paymentDetailsProvider->provide($payment, $scheme, $returnUrl),
+            [
+                'checkout_mode' => $checkoutMode,
+                'order' => ResourceSerializer::serializeResource($order),
+            ],
+        );
         $payment->setDetails($details);
 
         // Seule la redirection est reellement empruntee : les trois passerelles ont
@@ -93,5 +104,41 @@ final readonly class CapturePaymentRequestHandler
             PaymentRequestTransitions::GRAPH,
             PaymentRequestTransitions::TRANSITION_PROCESS,
         );
+    }
+
+    /**
+     * Meme garde que `SignMandateAction' sous Payum : elle validait ces champs avant l'appel.
+     * Sans elle, un champ vide ressort en 400 depuis Slimpay, avec un message qui ne dit pas
+     * d'ou vient le trou.
+     *
+     * @param array<string, mixed> $champs
+     */
+    private function assertMandateFieldsAreComplete(?string $subscriberReference, array $champs): void
+    {
+        $manquants = [];
+
+        if (null === $subscriberReference || '' === $subscriberReference) {
+            $manquants[] = 'subscriber_reference';
+        }
+
+        foreach ([
+            'givenName' => $champs['givenName'] ?? null,
+            'familyName' => $champs['familyName'] ?? null,
+            'billingAddress.street1' => $champs['billingAddress']['street1'] ?? null,
+            'billingAddress.city' => $champs['billingAddress']['city'] ?? null,
+            'billingAddress.postalCode' => $champs['billingAddress']['postalCode'] ?? null,
+            'billingAddress.country' => $champs['billingAddress']['country'] ?? null,
+        ] as $nom => $valeur) {
+            if (null === $valeur || '' === $valeur) {
+                $manquants[] = $nom;
+            }
+        }
+
+        if ([] !== $manquants) {
+            throw new \LogicException(sprintf(
+                'Slimpay mandate fields are incomplete: %s.',
+                implode(', ', $manquants),
+            ));
+        }
     }
 }

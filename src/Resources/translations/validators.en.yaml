@@ -1,0 +1,10 @@
+akki:
+    slimpay:
+        app_id:
+            not_blank: Please enter the application ID.
+        app_secret:
+            not_blank: Please enter the application secret key.
+        creditor_reference:
+            not_blank: Please enter the creditor reference.
+        default_checkout_mode:
+            not_blank: Please enter the checkout mode.

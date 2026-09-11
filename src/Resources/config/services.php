@@ -19,10 +19,20 @@ return static function (ContainerConfigurator $container): void {
     $services->defaults()
         ->autowire()
         ->autoconfigure()
+        // Portee au greffon : poser un alias sur UrlProviderInterface le rendrait global, or
+        // `sylius_shop.controller.payment_request_pay' s'en sert aussi.
+        //
+        // C'est `/pay/{hash}' et non l'apres-paiement : au retour de Slimpay, la demande de
+        // capture est ainsi relue par CaptureEnd, qui la finalise. Sans ca elle resterait en
+        // `processing' a vie. PaymentRequestPayAction bascule ensuite sur l'apres-paiement.
+        ->bind(
+            'Sylius\Bundle\CoreBundle\OrderPay\Provider\UrlProviderInterface $payUrlProvider',
+            service('sylius_shop.provider.order_pay.payment_request_pay_url'),
+        )
     ;
 
-    // Les attributs font le reste : #[AsGatewayConfigurationType] sur le formulaire,
-    // #[AsMessageHandler] sur les gestionnaires, #[AsNotifyPaymentProvider] a venir.
+    // Les attributs font le reste : #[AsGatewayConfigurationType] sur le formulaire et
+    // #[AsMessageHandler] sur les gestionnaires.
     $services->load('Akki\\SyliusSlimpayPlugin\\', __DIR__ . '/../../*')
         ->exclude([
             __DIR__ . '/../../{Command,Constants,DependencyInjection,Resources,Util}',
@@ -55,10 +65,4 @@ return static function (ContainerConfigurator $container): void {
     $services->set('akki.slimpay.provider.http_response.capture', CaptureHttpResponseProvider::class)
         ->tag('akki.slimpay.provider.http_response', ['action' => PaymentRequestInterface::ACTION_CAPTURE])
         ->tag('akki.slimpay.provider.http_response', ['action' => PaymentRequestInterface::ACTION_AUTHORIZE]);
-
-    $services->alias('akki.slimpay.order_pay.after_pay_url', 'sylius_shop.provider.order_pay.after_pay_url');
-    $services->alias(
-        \Sylius\Bundle\CoreBundle\OrderPay\Provider\UrlProviderInterface::class,
-        'sylius_shop.provider.order_pay.after_pay_url',
-    );
 };
