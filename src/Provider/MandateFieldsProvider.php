@@ -9,9 +9,15 @@ use Sylius\Component\Core\Model\PaymentInterface;
 /**
  * Construit les champs de mandat attendus par Slimpay a partir de la commande.
  *
- * Reprend a l'identique ce que faisaient `SyliusConvertAction' puis `SignMandateAction' sous Payum :
- * l'adresse de facturation alimente l'adresse du mandat, le client fournit la reference abonne.
- * La difference est qu'il n'y a plus d'aller-retour par un modele tableau partage entre actions.
+ * Reprend le mappage de `SyliusConvertAction' puis `SignMandateAction' sous Payum, a l'identique.
+ * Trois champs meritent d'etre explicites, parce qu'ils ne se devinent pas :
+ *
+ *   - `telephone', `companyName' et `organizationName' partent a `null'. Sous Payum, ils lisaient
+ *     `$model['phone']', `$model['company']' et `$model['organization']', qu'aucune action ne
+ *     posait jamais : l'ArrayObject rendait donc null. Les alimenter fait rejeter la commande --
+ *     Slimpay repond 400 code 142 « Invalid companyName property » sur une chaine vide.
+ *   - `street2' recoit la societe de l'adresse de facturation, pas une seconde ligne d'adresse.
+ *     C'est ce que faisait `$model['address2'] = $address->getCompany() ?? ''`.
  */
 final readonly class MandateFieldsProvider implements MandateFieldsProviderInterface
 {
@@ -25,12 +31,12 @@ final readonly class MandateFieldsProvider implements MandateFieldsProviderInter
             'givenName' => $address?->getFirstName(),
             'familyName' => $address?->getLastName(),
             'email' => $customer?->getEmail(),
-            'telephone' => $address?->getPhoneNumber(),
-            'companyName' => $address?->getCompany(),
-            'organizationName' => $address?->getCompany(),
+            'telephone' => null,
+            'companyName' => null,
+            'organizationName' => null,
             'billingAddress' => [
                 'street1' => $address?->getStreet(),
-                'street2' => '',
+                'street2' => $address?->getCompany() ?? '',
                 'city' => $address?->getCity(),
                 'postalCode' => $address?->getPostcode(),
                 'country' => $address?->getCountryCode(),

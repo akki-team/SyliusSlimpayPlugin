@@ -1,0 +1,10 @@
+akki:
+    slimpay:
+        gateway_label: Slimpay (prélèvement SEPA)
+        app_id: Identifiant de l'application
+        app_secret: Clé secrète de l'application
+        creditor_reference: Référence créditeur
+        sandbox: Bac à sable
+        default_checkout_mode: Mode de checkout
+        'no': Non
+        'yes': Oui
